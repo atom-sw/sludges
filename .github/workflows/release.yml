@@ -1,0 +1,49 @@
+# Verify a tagged release.
+#
+# This workflow stores no credentials and does not contact the package catalog.
+# The catalog polls the package source about once a day, and `scripts/release.sh`
+# notifies it directly from the maintainer's machine, so nothing here needs an
+# account password.
+#
+# `scripts/` is excluded from the release branch, so the steps below call `raco`
+# directly rather than reusing the repository's build and test scripts.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Bogdanp/setup-racket@v1.11
+        with:
+          version: '9.3'
+          variant: 'CS'
+          distribution: 'full'
+
+      # --auto installs the declared dependencies without prompting.  The name
+      # must be given explicitly: without it the package takes the name of the
+      # checkout directory, which is the repository name.
+      - name: Install the package
+        run: raco pkg install --auto --name sludges "$GITHUB_WORKSPACE"
+
+      # Catches an undeclared dependency and an invalid `version` in info.rkt,
+      # both of which the catalog's build server would flag after publication.
+      - name: Check package metadata and dependencies
+        run: raco setup --check-pkg-deps --no-docs sludges teachpack
+
+      - name: Run the test suite
+        run: raco test sludges/tests
+
+      # The catalog renders the scribblings; a failure here becomes a broken
+      # documentation link on the package page.
+      - name: Build the documentation
+        run: raco setup --no-launcher --no-foreign-libs sludges
