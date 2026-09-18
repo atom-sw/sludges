@@ -9,7 +9,7 @@
          racket/promise
          deinprogramm/signature/signature-english
          (only-in deinprogramm/signature/signature
-                  apply-signature make-signature
+                  apply-signature make-signature signature?
                   signature-name signature-enforcer signature-syntax
                   signature-info-promise signature-<=?-proc signature-=?-proc
                   signature-violation-proc
@@ -23,7 +23,7 @@
                    beginner-define-struct
                    intermediate-define-struct
                    advanced-define-struct
-                   signature ListOf Any False)
+                   signature ListOf Any False ConsOf)
          (only-in lang/private/set-result set!-result)
          (only-in errortrace/marks-to-context
                   errortrace-continuation-mark-set->context)
@@ -48,34 +48,58 @@
 
 
 
-;; # Predefined Signatures
+;; # Lifted Signatures
 
-
-;; ## Posn and PosnOf signatures
-
-;; Posn: non-parametric signature, checks (posn? x)
-(define Posn (signature Posn (predicate posn?)))
-
-;; PosnOf: parametric signature, checks (posn? x) and field signatures
+;; A type constructor such as PosnOf, ConsOf or Add1 denotes the image of a
+;; value constructor: (PosnOf X Y) describes the values (make-posn x y) with x
+;; in X and y in Y.  Checking membership never calls the constructor, it
+;; inverts it:
 ;;
-;; The outer make-signature wrapper intercepts violations from the inner
-;; combined signature and re-fires them with self (which inherits proper
+;;   v belongs to (C S1 ... Sn)  iff  (recognizer v), and
+;;                                    (selector-i v) belongs to Si, for every i
+;;
+;; which is exactly a combined signature of one predicate plus one property per
+;; argument.  make-lifted-signature builds that combination; PosnOf, Add1 and
+;; every constructor introduced by define-type-constructor go through it.
+;;
+;; Two properties of this encoding matter to whoever lifts a constructor:
+;;
+;;   * Checking is eager and deep.  make-property-signature discards the
+;;     enforced sub-value, so violations fire when the signature is applied
+;;     rather than when a selector is later called.  ConsOf, which DeinProgramm
+;;     builds on lazy wraps instead, behaves the other way round.
+;;
+;;   * A recursive type terminates only if the recognizer makes the selectors
+;;     strictly decreasing.  Lifting add1 with the recognizer number? and the
+;;     selector sub1, for instance, descends forever on 1.5; the recognizer of
+;;     Add1 below rules that out.
+;;
+;; name names the signature; #:expected names the type a violation message asks
+;; for, which differs from name only where the two have historically differed,
+;; as in PosnOf.  The outer make-signature wrapper intercepts violations from
+;; the inner combined signature and re-fires them with self (which inherits proper
 ;; syntax from the teaching language's make-call-signature) and a
 ;; pre-formatted message including the field type name.  Without this
 ;; wrapper, violations would show `main.rkt` as the blame location
 ;; (from the property-signature syntax objects) instead of the user's
 ;; source file.
-(define (PosnOf x-sig y-sig)
+(define (make-lifted-signature name recognizer selectors sigs
+                               #:expected [expected-name name])
+  (unless (= (length selectors) (length sigs))
+    (error name "expected ~a type argument(s), but got ~a"
+           (length selectors) (length sigs)))
   (let* ([inner
           (make-combined-signature
-           'Posn
-           (list (signature (predicate posn?))
-                 (make-property-signature (signature-name x-sig) posn-x x-sig #'posn)
-                 (make-property-signature (signature-name y-sig) posn-y y-sig #'posn))
+           name
+           (cons (make-predicate-signature #f (delay recognizer) #f)
+                 (map (lambda (selector sig)
+                        (make-property-signature (signature-name sig)
+                                                 selector sig #'lifted-signature))
+                      selectors sigs))
            #'parametric-signature)]
          [outer
           (make-signature
-           'Posn
+           name
            (lambda (self obj)
              (let ([old-proc (signature-violation-proc)])
                ((let/ec exit
@@ -83,16 +107,7 @@
                    (lambda (o s m b)
                      (exit (lambda ()
                              (old-proc o self
-                                       (or m
-                                           (let ([name (signature-name s)])
-                                             (if name
-                                                 (format "expected ~a ~a, but got ~e"
-                                                         (if (memv (char-downcase
-                                                                    (string-ref (format "~a" name) 0))
-                                                                   '(#\a #\e #\i #\o #\u))
-                                                             "an" "a")
-                                                         name o)
-                                                 (format "expected a PosnOf, but got ~e" o))))
+                                       (or m (expected-message (signature-name s) expected-name o))
                                        b)
                              obj)))
                    (lambda ()
@@ -103,6 +118,32 @@
            #:=?-proc (signature-=?-proc inner)
            #:<=?-proc (signature-<=?-proc inner))])
     outer))
+
+;; "expected a Posn, but got 3".  inner-name is the name of the signature that
+;; actually fired, and is #f for an unnamed one, in which case the name of the
+;; lifted constructor stands in.
+(define (expected-message inner-name fallback-name obj)
+  (let ([name (or inner-name fallback-name)])
+    (format "expected ~a ~a, but got ~e"
+            (if (memv (char-downcase (string-ref (format "~a" name) 0))
+                      '(#\a #\e #\i #\o #\u))
+                "an" "a")
+            name obj)))
+
+
+
+;; # Predefined Signatures
+
+
+;; ## Posn and PosnOf signatures
+
+;; Posn: non-parametric signature, checks (posn? x)
+(define Posn (signature Posn (predicate posn?)))
+
+;; PosnOf: parametric signature, checks (posn? x) and field signatures.
+(define (PosnOf x-sig y-sig)
+  (make-lifted-signature 'Posn posn? (list posn-x posn-y) (list x-sig y-sig)
+                         #:expected 'PosnOf))
 
 
 ;; ## Image signature
@@ -162,6 +203,61 @@
            #:=?-proc (signature-=?-proc inner)
            #:<=?-proc (signature-<=?-proc inner))])
     outer))
+
+
+;; ## Cons signature
+
+;; Cons: an alias of the student languages' ConsOf.
+;;
+;; A function lifted to a type constructor keeps its name, capitalized, as Add1
+;; capitalizes add1.  Cons is a faithful lift, where Add1 is not: it describes
+;; every value cons builds.  ConsOf remains available and the
+;; two are interchangeable, including inside the fold below, which recognizes
+;; either spelling.
+(define Cons ConsOf)
+
+
+;; ## Add1 parametric signature
+
+;; (Add1 T): a positive exact integer whose predecessor satisfies T.  It exists
+;; so that the natural numbers can be described by the recursion that defines
+;; them:
+;;
+;;   (define-type Natural (one-of (enum 0) (Add1 Natural)))
+;;
+;; Add1 is add1 with its domain restricted to the nonnegative exact integers:
+;; the recognizer accepts v when v > 0, so the predecessor sub1(v) handed to T
+;; is nonnegative, and the values Add1 describes are the positive exact
+;; integers.
+;;
+;; So Add1 is not a faithful lift of add1 the way Cons is of cons: add1 also
+;; accepts -5 and 1.5.  No faithful lift is possible here, because checking v
+;; against (Add1 T) checks sub1(v) against T, so a recursive type descends by
+;; sub1 until it reaches its base case, and nothing in Add1 can see where that
+;; base case is.  Widening the recognizer makes Natural above diverge instead
+;; of answering:
+;;
+;;   recognizer              0    3    -1      1.5     -4
+;;   exact-integer? and > 0  0    3    reject  reject  reject
+;;   exact-integer?          0    3    HANGS   reject  HANGS
+;;   number? (add1's domain) 0    3    HANGS   HANGS   HANGS
+;;
+;; -1 is exactly what one types when testing a function on naturals, so Add1
+;; buys a total check at the price of a narrower domain than add1.
+;;
+;; The restriction is worth naming.  Every base case at or above zero works,
+;; including (one-of (enum 1) (Add1 Pos)) and the nested
+;; (one-of (enum 0) (Add1 (Add1 Even))).  A negative base case does not:
+;; (one-of (enum -5) (Add1 T)) accepts only -5 and rejects -4, -1, 0 and 3,
+;; which do belong to the set it describes.  For those, use integer-from or
+;; integer-from-to, or build a constructor with the floor you need using
+;; define-type-constructor.  And (Add1 Integer) describes the positive
+;; integers rather than every integer.
+(define (Add1 T)
+  (make-lifted-signature 'Add1
+                         (lambda (v) (and (exact-integer? v) (> v 0)))
+                         (list sub1)
+                         (list T)))
 
 
 ;; ## Vector and VectorOf signatures
@@ -541,6 +637,56 @@
 ;; This transformation is applied regardless of the used student language: since
 ;; functions are already first-class in ISL/ISL+/ASL, first-order->higher-order
 ;; is an identity in those languages, and hence the transformation is harmless.
+;; ## Diagnosing a head that is not a type constructor
+
+;; The head of a type form must be a function from signatures to a signature:
+;; ConsOf, ListOf, Maybe, PosnOf, Add1, or a constructor introduced by
+;; define-type-constructor.  parse-signature accepts any identifier there and
+;; delays the call, so an ordinary function like cons or add1 passes unnoticed
+;; and then fails deep inside DeinProgramm the first time the signature is
+;; enforced, with a message that mentions neither the type nor the source line.
+;;
+;; define-type therefore probes each such head at definition time: it calls it
+;; on Any arguments and checks that the result is a signature.  A head that is
+;; not bound yet is left alone, so a type may still refer forward to a
+;; constructor defined further down the file.
+;; The pair entries point at Cons rather than at its other name ConsOf, so
+;; that the suggestion is the capitalization of what the user just wrote.
+(define type-constructor-hints
+  (hasheq 'cons "Cons" 'add1 "Add1" 'list "ListOf" 'make-posn "PosnOf"
+          'vector "VectorOf" 'first "Cons" 'rest "Cons" 'car "Cons"
+          'cdr "Cons" 'make-vector "VectorOf"))
+
+;; Types being probed right now.  A parametric type is recursive through a call
+;; form, as in (define-type (ListOfT T) (one-of EmptyList (ConsOf T (ListOfT T)))),
+;; and its checks sit in the function body, so probing a head would re-enter the
+;; very definition that is being checked.  Mutually recursive parametric types
+;; do the same through one another.  A type already under probe is skipped.
+(define types-being-probed (make-parameter '()))
+
+(define (check-type-constructor! type-name head-name probe where)
+  (define result
+    (if (memq type-name (types-being-probed))
+        'skipped
+        (parameterize ([types-being-probed (cons type-name (types-being-probed))])
+          (with-handlers ([exn:fail:contract:variable? (lambda (e) 'unbound)]
+                          [exn:fail? (lambda (e) e)])
+            (probe)))))
+  (unless (or (eq? result 'unbound) (eq? result 'skipped) (signature? result))
+    (error 'define-type
+           "~a is not a type constructor, in the definition of ~a~a~a~a"
+           head-name
+           type-name
+           (if where (format " (~a)" where) "")
+           (let ([alt (hash-ref type-constructor-hints head-name #f)])
+             (if alt (format "; use ~a instead" alt) ""))
+           (if (exn:fail? result)
+               (format "\n  calling ~a on a signature failed: ~a"
+                       head-name (exn-message result))
+               (format "\n  calling ~a on a signature returned ~e, not a signature"
+                       head-name result)))))
+
+
 (define-syntax (define-type stx)
   (syntax-case stx (predicate)
     ;; Parametric with predicate body
@@ -584,33 +730,87 @@
 	 ;; normalize the length of mixed forms as described above.
     [(_ (name param ...) body)
      (with-syntax ([body* (expand-interval-forms (fold-consof-prefixes #'body) #'body)])
-       (cond
-         ;; Folded body is still mixed/one-of, which can be used directly;
-         ;; name is threaded through (signature name body*).
-         [(mixed/one-of-form? #'body*)
-          #'(define (name param ...) (signature name body*))]
-         ;; Original was mixed but folding collapsed to single alternative;
-         ;; OR it's a compound form (not a bare identifier).
-         ;; Wrap in (mixed ...) for better violation attribution.
-         [(or (mixed/one-of-form? #'body)
-              (and (not (identifier? #'body*)) (not (mixed/one-of-form? #'body*))))
-          (with-syntax ([mixed-kw (datum->syntax #'body 'mixed #'body)])
-            #'(define (name param ...) (signature name (mixed-kw body*))))]
-         ;; Non-mixed body (bare identifier, etc): use as is.
-         [else
-          #'(define (name param ...) (signature name body*))]))]
+       (with-syntax ([(check ...) (type-constructor-checks #'body* #'name)])
+         (cond
+           ;; Folded body is still mixed/one-of, which can be used directly;
+           ;; name is threaded through (signature name body*).
+           [(mixed/one-of-form? #'body*)
+            #'(define (name param ...) (begin check ... (signature name body*)))]
+           ;; Original was mixed but folding collapsed to single alternative;
+           ;; OR it's a compound form (not a bare identifier).
+           ;; Wrap in (mixed ...) for better violation attribution.
+           [(or (mixed/one-of-form? #'body)
+                (and (not (identifier? #'body*)) (not (mixed/one-of-form? #'body*))))
+            (with-syntax ([mixed-kw (datum->syntax #'body 'mixed #'body)])
+              #'(define (name param ...) (begin check ... (signature name (mixed-kw body*)))))]
+           ;; Non-mixed body (bare identifier, etc): use as is.
+           [else
+            #'(define (name param ...) (begin check ... (signature name body*)))])))]
     ;; Simple, general body; same mixed wrapping logic as parametric.
     [(_ name body)
      (with-syntax ([body* (expand-interval-forms (fold-consof-prefixes #'body) #'body)])
-       (cond
-         [(mixed/one-of-form? #'body*)
-          #'(define name (signature name body*))]
-         [(or (mixed/one-of-form? #'body)
-              (and (not (identifier? #'body*)) (not (mixed/one-of-form? #'body*))))
-          (with-syntax ([mixed-kw (datum->syntax #'body 'mixed #'body)])
-            #'(define name (signature name (mixed-kw body*))))]
-         [else
-          #'(define name (signature name body*))]))]))
+       (with-syntax ([(check ...) (type-constructor-checks #'body* #'name)])
+         (cond
+           [(mixed/one-of-form? #'body*)
+            #'(define name (begin check ... (signature name body*)))]
+           [(or (mixed/one-of-form? #'body)
+                (and (not (identifier? #'body*)) (not (mixed/one-of-form? #'body*))))
+            (with-syntax ([mixed-kw (datum->syntax #'body 'mixed #'body)])
+              #'(define name (begin check ... (signature name (mixed-kw body*)))))]
+           [else
+            #'(define name (begin check ... (signature name body*)))])))]))
+
+
+
+;; # Type Constructors: define-type-constructor
+
+;; define-type-constructor introduces a new type constructor: a name that may
+;; head a type form, the way ConsOf, PosnOf and Add1 do.
+;;
+;;   (define-type-constructor (name param ...) recognizer (selector ...))
+;;
+;; recognizer recognizes the values the constructor builds, and there is one
+;; selector per parameter, recovering the corresponding component:
+;;
+;;   (define-type-constructor (Cons* first-sig rest-sig) cons? (first rest))
+;;   (define-type List (one-of EmptyList (Cons* Any List)))
+;;
+;; The form expands to a plain function definition, so the name it binds is an
+;; ordinary function from signatures to a signature, which is what the student
+;; languages require of the head of a type form.
+;;
+;; recognizer and the selectors go through first-order->higher-order, so they
+;; may be named as plain functions in BSL/BSL+, where functions are not first
+;; class.  first-order->higher-order is the identity in ISL/ISL+/ASL.
+;;
+;; Two rules govern a correct constructor; make-lifted-signature explains both.
+;; The recognizer must accept exactly the values the selectors can take apart,
+;; and in a recursive type it must make the selectors strictly decreasing, or
+;; checking the type will not terminate.
+(define-syntax (define-type-constructor stx)
+  (syntax-case stx ()
+    [(_ (name param ...) recognizer (selector ...))
+     (and (identifier? #'name)
+          (identifier? #'recognizer)
+          (andmap identifier? (syntax->list #'(param ...)))
+          (andmap identifier? (syntax->list #'(selector ...))))
+     (let ([params (syntax->list #'(param ...))]
+           [selectors (syntax->list #'(selector ...))])
+       (unless (= (length params) (length selectors))
+         (raise-syntax-error 'define-type-constructor
+           (format "expected one selector per parameter, but got ~a parameter(s) and ~a selector(s)"
+                   (length params) (length selectors))
+           stx))
+       (with-syntax ([recognizer-ho (first-order->higher-order #'recognizer)]
+                     [(selector-ho ...) (map first-order->higher-order selectors)])
+         #'(define (name param ...)
+             (make-lifted-signature 'name recognizer-ho
+                                    (list selector-ho ...)
+                                    (list param ...)))))]
+    [(_ . _)
+     (raise-syntax-error 'define-type-constructor
+       "expected (define-type-constructor (name param ...) recognizer (selector ...)), where name, recognizer, the parameters and the selectors are all names"
+       stx)]))
 
 
 
@@ -693,6 +893,76 @@
        #t]
       [_ #f]))
 
+  ;; ### Collect type-constructor checks for a define-type body.
+  ;;
+  ;; Returns one (check-type-constructor! ...) form per call form in the body
+  ;; whose head is not a keyword of the signature DSL, that is, per head that
+  ;; is supposed to be a type constructor.  See the comments on
+  ;; check-type-constructor! for what the check does and why.
+  ;;
+  ;; The walk recurses into the DSL forms whose operands are themselves
+  ;; signatures (mixed/one-of, combined, and the signature of a property) and
+  ;; into the operands of the call forms it checks.  It stays out of predicate,
+  ;; enum, ListOf, VectorOf and procedure signatures: their operands are user
+  ;; expressions, values, or types the student languages parse specially.  A
+  ;; form containing -> is a procedure signature, whose head is an argument
+  ;; type rather than a constructor.
+  (define (type-constructor-checks body type-name)
+
+    (define dsl-keywords
+      '(mixed one-of enum predicate combined property ListOf VectorOf -> at signature))
+
+    ;; "student.rkt:12:23", or #f when the form carries no source location.
+    (define (form-location stx)
+      (let ([src (syntax-source stx)]
+            [line (syntax-line stx)]
+            [col (syntax-column stx)])
+        (and src line col
+             (format "~a:~a:~a"
+                     (if (path? src)
+                         (let-values ([(base file dir?) (split-path src)])
+                           (if (path? file) (path->string file) src))
+                         src)
+                     line col))))
+
+    (define (make-check head args form)
+      (with-syntax ([head-ho (first-order->higher-order head)]
+                    [(any ...) (map (lambda (a) #'Any) args)]
+                    [head-name (syntax-e head)]
+                    [tname (syntax-e type-name)]
+                    [where (form-location form)])
+        #'(check-type-constructor! 'tname 'head-name
+                                   (lambda () (head-ho any ...))
+                                   where)))
+
+    (define checks '())
+
+    (define (walk stx)
+      (syntax-case stx ()
+        [(head arg ...)
+         (identifier? #'head)
+         (let ([sym (syntax-e #'head)]
+               [args (syntax->list #'(arg ...))])
+           (cond
+             [(memq sym '(mixed one-of combined)) (for-each walk args)]
+             [(eq? sym 'property)
+              (when (= (length args) 2) (walk (cadr args)))]
+             [(memq sym dsl-keywords) (void)]
+             ;; (A B -> C): a procedure signature, not an application
+             [(ormap (lambda (s) (and (identifier? s) (eq? (syntax-e s) '->)))
+                     (cons #'head args))
+              (void)]
+             ;; a recursive reference to the type being defined, not a head
+             ;; that could be checked
+             [(eq? sym (syntax-e type-name)) (for-each walk args)]
+             [else
+              (set! checks (cons (make-check #'head args stx) checks))
+              (for-each walk args)]))]
+        [_ (void)]))
+
+    (walk body)
+    (reverse checks))
+
   ;; ### Normalize a define-type body.
   ;;   1. Fold ConsOf branches that share a common "car" signature in a mixed/one-of form.
   ;;   2. Wrap inner mixed instances of multiple ConsOf cdr in (combined ...).
@@ -736,10 +1006,12 @@
     (define (mixed-head? stx)
       (memq (id-sym stx) '(mixed one-of)))
 
-    ;; Is this a (ConsOf car cdr) form?
+    ;; Is this a (ConsOf car cdr) form?  Cons is an alias of ConsOf, so a
+    ;; student may have written either; branches spelled differently still
+    ;; denote the same constructor and still fold together.
     (define (consof-form? stx)
       (syntax-case stx ()
-        [(head a d) (eq? (id-sym #'head) 'ConsOf) #t]
+        [(head a d) (memq (id-sym #'head) '(ConsOf Cons)) #t]
         [_ #f]))
 
     ;; Recursively fold a single alternative (which might itself be a mixed).
@@ -767,13 +1039,15 @@
       (for ([alt (in-list folded)])
         (if (consof-form? alt)
             (syntax-case alt ()
-              [(_ a d)
+              [(hd a d)
                (let ([key (syntax->datum #'a)])
                  (if (hash-has-key? car->cdrs key)
                      (hash-set! car->cdrs key
                                 (append (hash-ref car->cdrs key) (list #'d)))
                      (begin
-                       (set! car-order (append car-order (list (list key #'a))))
+                       ;; keep the head of the first branch of each group, so
+                       ;; the rebuilt form is spelled the way the user wrote it
+                       (set! car-order (append car-order (list (list key #'a #'hd))))
                        (hash-set! car->cdrs key (list #'d)))))])
             (set! non-consof (append non-consof (list alt)))))
 
@@ -781,12 +1055,13 @@
       (define consof-alts
         (for/list ([key+car-stx (in-list car-order)])
           (define car-stx (cadr key+car-stx))
+          (define consof-kw (caddr key+car-stx))
           (define key (car key+car-stx))
           (define cdrs (hash-ref car->cdrs key))
           (if (= (length cdrs) 1)
               ;; Single entry: reconstruct (ConsOf car cdr)
               (datum->syntax mixed-kw
-                             `(,(datum->syntax mixed-kw 'ConsOf mixed-kw)
+                             `(,consof-kw
                                ,car-stx
                                ,(car cdrs))
                              mixed-kw)
@@ -811,7 +1086,7 @@
                                         ,inner-folded)
                                       mixed-kw)])
                  (datum->syntax mixed-kw
-                                `(,(datum->syntax mixed-kw 'ConsOf mixed-kw)
+                                `(,consof-kw
                                   ,car-stx
                                   ,inner-wrapped)
                                 mixed-kw)))))
@@ -1513,6 +1788,7 @@
 
 (provide one-of
          define-type
+         define-type-constructor
          define-header
          define-template
          max-signature-violations
@@ -1522,6 +1798,8 @@
          KeyEvent
          List
          Maybe
+         Cons
+         Add1
          Vector
          VectorOf
          Void
@@ -1539,4 +1817,9 @@
           number-from
           number-from<
           number-to
-          number-<to)
+          number-<to
+          ;; Referenced by the expansion of define-type-constructor and
+          ;; define-type, so they have to cross the module boundary; they
+          ;; are not part of the user-facing interface.
+          make-lifted-signature
+          check-type-constructor!)

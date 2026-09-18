@@ -65,6 +65,56 @@ teachpacks directory.  Thus if the teachpack's source code is updated,
 you will need to repeat these steps.
 
 
+## Updating
+
+### From a package server
+
+When a new release reaches `pkgs.racket-lang.org`:
+
+```
+raco pkg update sludges
+```
+
+Restart DrRacket afterwards, so that it picks up the recompiled
+collection.  To update every installed package at once, use
+`raco pkg update --all` instead.
+
+To see what you have now, and where it came from:
+
+```
+raco pkg show sludges
+```
+
+That prints the installed checksum and source, but not the release
+number.  For the release number:
+
+```
+racket -e '(require pkg/lib setup/getinfo) (displayln ((get-info/full (pkg-directory "sludges")) (quote version)))'
+```
+
+[CHANGELOG.md](CHANGELOG.md) records what each release adds and changes.
+
+### From a local clone
+
+A clone installed with `raco pkg install` is a development link: Racket
+reads the source files in place, so `raco pkg update` has nothing to
+fetch.  Pull the new commits and recompile instead:
+
+```
+git pull
+raco setup -l sludges
+```
+
+Restart DrRacket afterwards.
+
+### A manually added teachpack
+
+DrRacket copied `sludges/dist/sludges.rkt` into its own user-installed
+teachpacks directory, and that copy does not follow the original.  To
+update it, get the new version of the file and repeat the steps under
+"As a teachpack without `raco pkg install`" above.
+
+
 ## Usage
 
 ### As a library (via `require`)

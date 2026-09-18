@@ -105,6 +105,57 @@ An alternative name for @racket[mixed].
 Available in: all student languages.
 }
 
+@defform[(define-type-constructor (name param ...) recognizer (selector ...))]{
+
+Defines @racket[name] as a new type constructor: a name that can head a type
+form, the way @racket[ConsOf], @racket[PosnOf] and @racket[Add1] do.
+
+A type constructor describes the values that some function builds.
+@racket[(ConsOf Number EmptyList)], for instance, describes the values
+@racket[(cons n '())] with @racket[n] a number.  Checking a value against such
+a type never calls the function: it takes the value apart instead.  So a type
+constructor is defined by @racket[recognizer], which recognizes the values the
+function builds, together with one @racket[selector] per parameter, which
+recovers the corresponding component.  A value belongs to
+@racket[(name S1 ... Sn)] exactly when @racket[recognizer] accepts it and each
+selector maps it into the corresponding @racket[S].
+
+@racketblock[
+(define-type-constructor (Cons* first-sig rest-sig) cons? (first rest))
+
+(define-type NumList (one-of EmptyList (Cons* Number NumList)))
+
+(: sum-nums (NumList -> Number))
+(define (sum-nums xs)
+  (cond
+    [(empty? xs) 0]
+    [else (+ (first xs) (sum-nums (rest xs)))]))
+]
+
+There must be exactly one selector per parameter.  @racket[recognizer] and the
+selectors are names of functions, which may be ordinary first-order functions
+even in BSL and BSL+.
+
+A correct type constructor definition has two requirements:
+
+@itemlist[#:style 'ordered
+  @item{@racket[recognizer] must accept exactly the values the selectors can
+        take apart.}
+  @item{@elemtag["sludges-tc-decreasing"]{In a recursive type}, @racket[recognizer]
+        must make the selectors strictly decreasing,
+        so that the recursion terminates upon reaching a base case.}
+]
+
+Since an unconstrained lift of @racket[add1] would break the
+@elemref["sludges-tc-decreasing"]{second requirement},
+@racket[Add1] restricts its recognizer to positive exact integers.
+
+Checking a lifted type is eager: a violation is reported when the signature is
+applied, rather than when a selector is later called.
+
+Available in: all student languages.
+}
+
 @; ========================================
 @section[#:tag "sludges-structs"]{Typed Struct Definitions}
 
@@ -273,6 +324,57 @@ or @racket[#false].
 ; The index of the first occurrence of s in lst,
 ; or #false if s is not found in lst.
 ]
+
+Available in: all student languages.
+}
+
+@defproc[(Cons [first-sig signature?] [rest-sig signature?]) signature?]{
+Another name for the student languages' @racket[ConsOf]: a signature for a
+@racket[cons] whose first satisfies @racket[first-sig] and whose rest satisfies
+@racket[rest-sig].
+
+A function lifted to a type constructor keeps its name, capitalized, as
+@racket[add1] becomes @racket[Add1].  @racket[Cons] is that name for
+@racket[cons], and unlike @racket[Add1] it is a faithful lift: it describes
+every value @racket[cons] builds.
+
+@racketblock[
+(define-type NumList (one-of EmptyList (Cons Number NumList)))
+]
+
+@racket[Cons] and @racket[ConsOf] are the same function, and the two spellings
+may be used interchangeably, including within one definition.
+
+Available in: all student languages.
+}
+
+@defproc[(Add1 [sig signature?]) signature?]{
+A signature for a positive exact integer whose predecessor satisfies
+@racket[sig].
+
+With @racket[Add1], the natural numbers can be described as a recursive type:
+
+@racketblock[
+(define-type Natural (one-of (enum 0) (Add1 Natural)))
+]
+
+@racket[Add1] is @racket[add1] with its domain restricted to the nonnegative
+exact integers: the recognizer accepts a value above zero, so the predecessor
+handed to @racket[sig] is nonnegative, and the values @racket[Add1] describes
+are the positive exact integers.
+
+@racket[Add1] is not a faithful lift of @racket[add1] the way @racket[Cons]
+is of @racket[cons]: @racket[add1] also accepts @racket[-5] and @racket[1.5].
+The restriction is necessary because @racket[(Add1 T)] checks its predecessor
+against @racket[T], and this recursive check needs a base case to terminate.
+
+@racket[Add1] still works for any recursive definition with a base case at
+or above zero, such as @racket[(one-of (enum 1) (Add1 Pos))] and the nested
+@racket[(one-of (enum 0) (Add1 (Add1 Even)))].  A negative base case does not:
+@racket[(one-of (enum -5) (Add1 T))] accepts only @racket[-5], and rejects
+@racket[-4], @racket[-1], @racket[0] and @racket[3]. For a range like that,
+use @racket[integer-from] or @racket[integer-from-to], or build a constructor
+with the floor you need using @racket[define-type-constructor].
 
 Available in: all student languages.
 }

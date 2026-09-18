@@ -208,3 +208,30 @@
                     "sublist (2 3 4) should be valid as NEL")
   (check-not-equal? (say-no (apply-signature List2+/cross sub)) 'no
                     "sublist (2 3 4) should be valid as List2+/cross"))
+
+;; ----------------------------------------
+;; Cons, the alias of ConsOf, folds the same way
+;; ----------------------------------------
+;; The fold keys on the head of each branch, so it has to recognize either
+;; spelling.  Without that, a type written with Cons would skip the fold and
+;; hit the very DeinProgramm bug the fold exists to avoid.
+
+(define-type Two+ConsOf (one-of (ConsOf String (ConsOf String EmptyList))
+                                (ConsOf String Two+ConsOf)))
+(define-type Two+Cons   (one-of (Cons String (Cons String EmptyList))
+                                (Cons String Two+Cons)))
+;; the two spellings may even be mixed within one definition
+(define-type Two+Both   (one-of (Cons String (ConsOf String EmptyList))
+                                (ConsOf String Two+Both)))
+
+(define (accepts? t v) (not (eq? (say-no (apply-signature t v)) 'no)))
+
+(for ([t (list Two+ConsOf Two+Cons Two+Both)]
+      [name '(Two+ConsOf Two+Cons Two+Both)])
+  (check-true  (accepts? t '("a" "b"))     (format "~a accepts two strings" name))
+  (check-true  (accepts? t '("a" "b" "c")) (format "~a accepts three strings" name))
+  (check-false (accepts? t (list "a" 1))   (format "~a rejects a non-string" name))
+  (check-false (accepts? t 5)              (format "~a rejects a non-list" name)))
+
+;; Cons is the same function as ConsOf, not a copy
+(check-eq? Cons ConsOf)

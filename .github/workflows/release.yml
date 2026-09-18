@@ -1,4 +1,4 @@
-# Verify a tagged release.
+# Verify the package on a clean, headless machine.
 #
 # This workflow stores no credentials and does not contact the package catalog.
 # The catalog polls the package source about once a day, and `scripts/release.sh`
@@ -7,13 +7,24 @@
 #
 # `scripts/` is excluded from the release branch, so the steps below call `raco`
 # directly rather than reusing the repository's build and test scripts.
+#
+# It runs on any push of `main`, which happens twice for each release: first to
+# the private repository, where `release.sh` stages the snapshot, and then to the
+# public one.  The private run is the point of the arrangement — a runner differs
+# from a development machine in ways the local gate cannot see (no X display, none
+# of the packages a full local install accumulates), and the staged release can
+# still be amended, whereas a published one cannot.
+#
+# `dev` is deliberately not a trigger: development commits are frequent and this
+# check is about the release snapshot.  Use the Actions tab's "Run workflow" for
+# an ad-hoc run.
 
 name: release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -21,13 +32,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: Bogdanp/setup-racket@v1.11
+      - uses: Bogdanp/setup-racket@v1.15
         with:
           version: '9.3'
           variant: 'CS'
           distribution: 'full'
+
+      # `MouseEvent` and `KeyEvent` pull in 2htdp/universe, hence racket/gui/base,
+      # hence GTK, which aborts with "Gtk initialization failed" when it cannot
+      # reach an X display.  A runner has none, so the tests need a virtual one.
+      # This is a property of the runner, not of the package: students always run
+      # under DrRacket, which has a display by definition.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
 
       # --auto installs the declared dependencies without prompting.  The name
       # must be given explicitly: without it the package takes the name of the
@@ -41,7 +60,7 @@ jobs:
         run: raco setup --check-pkg-deps --no-docs sludges teachpack
 
       - name: Run the test suite
-        run: raco test sludges/tests
+        run: xvfb-run -a raco test sludges/tests
 
       # The catalog renders the scribblings; a failure here becomes a broken
       # documentation link on the package page.

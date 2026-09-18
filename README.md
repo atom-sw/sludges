@@ -132,6 +132,29 @@ itemizations and other kinds of mixed data. The name `one-of` mirrors
 the structured natural language descriptions that are used in
 HtDP, such as in the comments describing data type `Two+List` defined above.
 
+### Type constructors
+
+`define-type-constructor` lifts a regular function to be used as type
+constructor.  A type constructor describes the values that some
+function builds. To check a value against it, we need to take the
+value apart according to the function's inverse. Hence,
+`define-type-constructor` inputs:
+
+- a predicate, used to recognize instances of the type
+- one selector per type parameter
+
+For example `Cons` could be equivalently defined as:
+
+```racket
+(define-type-constructor (Cons* first-sig rest-sig) cons? (first rest))
+
+(define-type NumList (one-of EmptyList (Cons* Number NumList)))
+```
+
+The recognizer predicate must accept exactly the values the selectors
+take apart; in a recursive type it must make the selectors strictly
+decreasing, so that checking reaches the base case.
+
 ### Predicates in BSL
 
 Data types based on predicates (using `predicate`) now also work in
@@ -163,6 +186,21 @@ In addition the predefined signatures available in the student languages
   [`vector`](https://docs.racket-lang.org/htdp-langs/advanced.html#%28def._htdp-advanced._%28%28lib._lang%2Fhtdp-advanced..rkt%29._vector%29%29)
 
 - `Void` for the type of `(void)` returned by `set!` expressions.
+
+- `Cons` as another name for the student languages' `ConsOf`, following
+  the convention that the name of a regular function (`cons`) lifted to
+  type constructor (`Cons`) gets capitalized.
+
+- `Add1 T` for a positive integer whose predecessor satisfies
+  `T`, so that the natural numbers can be described by the recursion
+  that defines them: `(define-type Natural (one-of (enum 0) (Add1
+  Natural)))`.
+
+  Since `Add1` is `add1` with its domain restricted to the nonnegative
+  integers, it is not a full lift of `add1`. This restriction is necessary
+  because checking a value against `(Add1 T)` checks its predecessor
+  against `T`; thus, the recursive downward check needs a base case to
+  terminate.
 
 Note that `Vector`, `VectorOf` and `Void` only work in
 [ASL](https://docs.racket-lang.org/htdp/index.html#%28part._.Ht.D.P_.Advanced_.Student%29),

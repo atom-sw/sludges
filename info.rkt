@@ -5,7 +5,7 @@
 ;; Racket package versions are not semantic versions: `valid-version?` accepts
 ;; X.Y or X.Y.Z[.W], but rejects anything ending in `.0` beyond the two-component
 ;; form.  So 1.0 and 1.0.1 are fine, while 1.0.0 and 2.0.0 are not.
-(define version "1.0")
+(define version "1.1")
 
 (define deps
   '("base"

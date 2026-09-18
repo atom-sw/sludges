@@ -3,7 +3,7 @@
 (require rackunit
          (only-in lang/private/teach
                   signature
-                  Integer Natural Boolean String)
+                  Integer Natural Boolean String Any EmptyList)
          deinprogramm/signature/signature
          sludges)
 
@@ -125,3 +125,22 @@
 (check-equal? (say-no (apply-signature PositiveNum 5)) 5)
 (check-equal? (say-no (apply-signature PositiveNum -3)) 'no)
 (check-equal? (say-no (apply-signature PositiveNum 0)) 'no)
+
+;; ----------------------------------------
+;; A head that is not a type constructor
+;; ----------------------------------------
+;; The head of a type form must be a function from signatures to a signature.
+;; parse-signature accepts any identifier there and delays the call, so an
+;; ordinary function such as cons or add1 goes unnoticed until the signature is
+;; enforced, and then fails deep inside DeinProgramm.  define-type probes each
+;; head when the definition is evaluated and reports it in terms of the
+;; definition the user wrote.
+
+(define-syntax-rule (check-bad-head ?rx ?body)
+  (check-exn ?rx (lambda () (let () ?body (void)))))
+
+(check-bad-head #rx"add1 is not a type constructor.*in the definition of Nat"
+  (define-type Nat (one-of (enum 0) (add1 Nat))))
+
+(check-bad-head #rx"cons is not a type constructor.*in the definition of Lst"
+  (define-type Lst (one-of EmptyList (cons Any Lst))))
