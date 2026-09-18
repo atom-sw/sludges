@@ -11,6 +11,16 @@ and never `1.0.0` or `2.0.0`.
 
 ## [Unreleased]
 
+## [1.1.1]
+
+### Fixed
+
+- The package build service reported a failing test for
+  `sludges/examples/readme-examples.rkt`.  That file demonstrates the README's
+  signature violations, and a violation lets execution continue, so it goes on
+  to raise: it is a demonstration that `raco test` can only score as a failure.
+  It is no longer run as a test, and is still compiled.
+
 ## [1.1]
 
 ### Added
@@ -62,6 +72,7 @@ First public release.
 - A standalone teachpack, `sludges/dist/sludges.rkt`, that can be added in
   DrRacket without installing the package.
 
-[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.1...HEAD
+[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/atom-sw/sludges/releases/tag/v1.1.1
 [1.1]: https://github.com/atom-sw/sludges/releases/tag/v1.1
 [1.0]: https://github.com/atom-sw/sludges/releases/tag/v1.0

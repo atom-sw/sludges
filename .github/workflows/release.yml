@@ -59,8 +59,14 @@ jobs:
       - name: Check package metadata and dependencies
         run: raco setup --check-pkg-deps --no-docs sludges teachpack
 
+      # The catalog's build server runs `raco test --drdr` over the whole
+      # package, so mirror that scope rather than testing sludges/tests alone:
+      # a demonstration in examples/ once sat on the build server's
+      # test-failure list while every run here was green.  Directories, not
+      # --package: with package arguments --drdr also tests dependencies, which
+      # would pull in htdp-lib and the rest of them.
       - name: Run the test suite
-        run: xvfb-run -a raco test sludges/tests
+        run: xvfb-run -a raco test --drdr sludges teachpack
 
       # The catalog renders the scribblings; a failure here becomes a broken
       # documentation link on the package page.
