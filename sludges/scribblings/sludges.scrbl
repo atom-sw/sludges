@@ -35,7 +35,7 @@ Load it in your program with:
 
 A @bold{signature} denotes a data type (a set of values)
 and is specified as a @italic{signature form},
-a special syntax that can only used in @racket[:] signature declarations,
+a special syntax that can only be used in @racket[:] signature declarations,
 inside @racket[signature] expressions, or in @racketmodname[sludges]'s
 @racket[define-type] definitions.
 
@@ -71,7 +71,7 @@ The first form binds @racket[name] to the signature described by
 @racketblock[
 (define-type StringOrFalse (one-of String False))
 
-(: X PossiblyString)
+(: X StringOrFalse)
 (define X "hello")
 ]
 
@@ -82,13 +82,13 @@ signature parameters and returns a new signature:
 (define-type (Either A B) (one-of A B))
 
 (: string->number/maybe (String -> (Either Number String)))
-; Converts the input string to a number of possible, otherwise returns it unchanged
+; Converts the input string to a number if possible, otherwise returns it unchanged
 ]
 
 @racket[define-type] can also describe recursive types:
 
 @racketblock[
-(define-type List<Number> (one-of Empty (ConsOf Number NumberList)))
+(define-type List-of-Number (one-of EmptyList (ConsOf Number List-of-Number)))
 ]
 
 Available in: all student languages.

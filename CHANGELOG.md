@@ -11,6 +11,13 @@ and never `1.0.0` or `2.0.0`.
 
 ## [Unreleased]
 
+## [1.1.2]
+
+### Fixed
+
+- Documentation: fix two typos, and inconsistencies in the examples of
+  `define-type`.
+
 ## [1.1.1]
 
 ### Fixed
@@ -72,7 +79,8 @@ First public release.
 - A standalone teachpack, `sludges/dist/sludges.rkt`, that can be added in
   DrRacket without installing the package.
 
-[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/atom-sw/sludges/releases/tag/v1.1.2
 [1.1.1]: https://github.com/atom-sw/sludges/releases/tag/v1.1.1
 [1.1]: https://github.com/atom-sw/sludges/releases/tag/v1.1
 [1.0]: https://github.com/atom-sw/sludges/releases/tag/v1.0
