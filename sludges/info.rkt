@@ -16,4 +16,8 @@
 ;; can only ever score as a failure, which is how it reached the package build
 ;; server's test-failure list.  It stays compiled, so errors in it are still
 ;; caught; it is only not a test.
-(define test-omit-paths '("dist" "examples"))
+;;
+;; `tests/fixtures/` holds student-language modules that a test loads under the
+;; teaching languages' violation reporter.  Run directly, they score failures on
+;; purpose.
+(define test-omit-paths '("dist" "examples" "tests/fixtures"))

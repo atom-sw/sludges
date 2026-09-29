@@ -151,9 +151,18 @@ For example `Cons` could be equivalently defined as:
 (define-type NumList (one-of EmptyList (Cons* Number NumList)))
 ```
 
-The recognizer predicate must accept exactly the values the selectors
-take apart; in a recursive type it must make the selectors strictly
-decreasing, so that checking reaches the base case.
+A correct type constructor definition meets these requirements:
+
+- The recognizer is a total function: it returns `#true` exactly for
+  the values that the selectors can take apart; `#false` for any other
+  value; and never raises an error.
+- Each selector goes from the new type to the corresponding component
+  type: it takes a value that the function built, and returns the
+  argument that the function built it from.  For `Cons*`, `first`
+  takes a list to its first element.
+- In a recursive type, the recognizer makes the selectors strictly
+  decreasing, so that checking reaches the base case.
+
 
 ### Predicates in BSL
 

@@ -465,6 +465,8 @@ students are expected to run tests within DrRacket.
 
 This package's source code was mainly written with
 [OpenCode](https://opencode.ai/) connected to Claude Opus/Sonnet
-backend. Later revisions used Claude Code. The documentation,
-including some of these implementation notes, were written 
-which occasionally led to revision of the source code.
+backend. Later revisions used [Claude
+Code](https://claude.com/product/claude-code) with the same model
+backends. Most of the top-level documentation, including these
+implementation notes, was either written by hand &mdash; either from
+scratch or by heavily reworking initial drafts by Claude.

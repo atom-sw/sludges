@@ -14,7 +14,10 @@
                   signature-info-promise signature-<=?-proc signature-=?-proc
                   signature-violation-proc
                   call-with-signature-violation-proc
-                  signature-violation)
+                  signature-violation
+                  make-exn:fail:contract:signature)
+         (only-in test-engine/racket-tests
+                  [check-error native-check-error])
          ;; All three define-struct variants, for language-appropriate delegation.
          ;; beginner:     first-order? #t, setters? #f  (BSL, BSL+)
          ;; intermediate: first-order? #f, setters? #f  (ISL, ISL+)
@@ -612,6 +615,37 @@
         (datum->syntax stx
                        (cons #'intermediate-define-struct #'rest)
                        stx stx)])]))
+
+
+
+;; # Tests that expect an error: check-error
+
+;; check-error: shadows native check-error so that a signature violation
+;; inside the tested expression counts as the expected error.
+;;
+;; In teaching languages the violation handler logs and returns, so the
+;; violation never reaches check-error's exception handler: the test engine
+;; reports it separately as a signature violation, and the verdict depends
+;; on whether the function body happens to crash on the bad value later.
+;; While the tested expression runs, raise-signature-violations? makes the
+;; handler raise exn:fail:contract:signature instead; check-error catches it
+;; like any other error, and the violation is neither logged nor counted
+;; for deduplication.  Its message is the enhanced one, so
+;;   (check-error (f '()) "expected a Foo, but got '()")
+;; also works.
+;;
+;; The stepper knows the shape of check-expect-maker's output; stepping
+;; through a check-error may show the extra parameterize.
+(define-syntax (check-error stx)
+  (syntax-case stx ()
+    [(_ test . rest)
+     (quasisyntax/loc stx
+       (native-check-error
+        (parameterize ([raise-signature-violations? #t]) test)
+        . rest))]
+    ;; No tested expression — delegate to native for error messages
+    [_ (datum->syntax stx (cons #'native-check-error (cdr (syntax-e stx)))
+                      stx stx)]))
 
 
 
@@ -1657,6 +1691,10 @@
 (define max-signature-violations (make-parameter 1))
 (define signature-violation-dedup (make-parameter 'signature))
 
+;; #t while evaluating the tested expression of a check-error: signature
+;; violations then raise, so check-error sees them as errors.  Not exported.
+(define raise-signature-violations? (make-parameter #f))
+
 
 ;; ## Enhanced signature violation messages & deduplication
 
@@ -1692,6 +1730,11 @@
 ;;    returns (teaching language context only), we replace the srcloc on
 ;;    the most-recently added signature-violation with one computed by our
 ;;    own continuation-marks-srcloc that filters out sludges frames.
+;;
+;; 4. Raise inside check-error.
+;;    While raise-signature-violations? is #t (set by our check-error), it
+;;    raises exn:fail:contract:signature with the enhanced message instead,
+;;    skipping steps 2 and 3, so check-error sees the violation as an error.
 
 ;; Source path of this very module, used to recognize sludges frames even
 ;; when this file is not installed as part of the sludges collection (for
@@ -1738,49 +1781,56 @@
                                                 '(#\a #\e #\i #\o #\u)))
                                      "an" "a")])
                    (format "expected ~a ~a, but got ~e" article name obj))
-                 message)]
-           ;; Capture the correct srcloc now, before calling original-proc.
-           [correct-srcloc (user-srcloc (current-continuation-marks))]
-           [cap (max-signature-violations)]
-           [name (signature-name sig)]
-           [mode (signature-violation-dedup)])
-       (let ([key
-              (and cap name mode
-                   (cond
-                     [(eq? mode 'type-name)  name]
-                     [(eq? mode 'signature)  (cons name (eq-hash-code sig))]
-                     [(eq? mode 'object)     (cons name (eq-hash-code obj))]
-                     [else                   #f]))])
-         (cond
-           ;; Cap active, bucket identified, already at cap → suppress
-           [(and key (>= (hash-ref seen key 0) cap))
-            (void)]
-           ;; Otherwise report and (if delegate returns) bump the counter
-           [else
-            (original-proc obj sig enhanced-message blame-srcloc)
-            ;; Only reached when original-proc returns (teaching language).
-            ;; In exception context (rackunit) the line below is never
-            ;; executed, so the hash stays empty and dedup stays inactive.
-            ;;
-            ;; Fix up the srcloc: report-signature-violation! used
-            ;; continuation-marks-srcloc which picked up a sludges frame.
-            ;; Replace it with the correct user-code srcloc.
-            (when correct-srcloc
-              (let* ([to  (te:current-test-object)]
-                     [vs  (te:test-object-signature-violations to)])
-                (when (pair? vs)
-                  (let ([v (car vs)])
-                    (te:set-test-object-signature-violations!
-                     to
-                     (cons (te:signature-violation
-                            (te:signature-violation-obj v)
-                            (te:signature-violation-signature v)
-                            (te:signature-violation-message v)
-                            correct-srcloc
-                            (te:signature-violation-blame-srcloc v))
-                           (cdr vs)))))))
-            (when key
-              (hash-set! seen key (add1 (hash-ref seen key 0))))]))))))
+                 message)])
+       (if (raise-signature-violations?)
+           ;; Inside a check-error: raise, so that check-error sees the
+           ;; violation as an error; skip logging, srcloc fix-up and dedup.
+           (raise (make-exn:fail:contract:signature
+                   (or enhanced-message (format "got ~e" obj))
+                   (current-continuation-marks)
+                   obj sig blame-srcloc))
+           (let (;; Capture the correct srcloc now, before calling original-proc.
+                 [correct-srcloc (user-srcloc (current-continuation-marks))]
+                 [cap (max-signature-violations)]
+                 [name (signature-name sig)]
+                 [mode (signature-violation-dedup)])
+             (let ([key
+                    (and cap name mode
+                         (cond
+                           [(eq? mode 'type-name)  name]
+                           [(eq? mode 'signature)  (cons name (eq-hash-code sig))]
+                           [(eq? mode 'object)     (cons name (eq-hash-code obj))]
+                           [else                   #f]))])
+               (cond
+                 ;; Cap active, bucket identified, already at cap → suppress
+                 [(and key (>= (hash-ref seen key 0) cap))
+                  (void)]
+                 ;; Otherwise report and (if delegate returns) bump the counter
+                 [else
+                  (original-proc obj sig enhanced-message blame-srcloc)
+                  ;; Only reached when original-proc returns (teaching language).
+                  ;; In exception context (rackunit) the line below is never
+                  ;; executed, so the hash stays empty and dedup stays inactive.
+                  ;;
+                  ;; Fix up the srcloc: report-signature-violation! used
+                  ;; continuation-marks-srcloc which picked up a sludges frame.
+                  ;; Replace it with the correct user-code srcloc.
+                  (when correct-srcloc
+                    (let* ([to  (te:current-test-object)]
+                           [vs  (te:test-object-signature-violations to)])
+                      (when (pair? vs)
+                        (let ([v (car vs)])
+                          (te:set-test-object-signature-violations!
+                           to
+                           (cons (te:signature-violation
+                                  (te:signature-violation-obj v)
+                                  (te:signature-violation-signature v)
+                                  (te:signature-violation-message v)
+                                  correct-srcloc
+                                  (te:signature-violation-blame-srcloc v))
+                                 (cdr vs)))))))
+                  (when key
+                    (hash-set! seen key (add1 (hash-ref seen key 0))))]))))))))
 
 
 
@@ -1807,6 +1857,7 @@
           PosnOf
           define-struct/typed
           define-struct
+          check-error
           integer-from-to
           integer-from
           integer-to

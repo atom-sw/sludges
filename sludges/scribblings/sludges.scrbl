@@ -113,7 +113,7 @@ form, the way @racket[ConsOf], @racket[PosnOf] and @racket[Add1] do.
 A type constructor describes the values that some function builds.
 @racket[(ConsOf Number EmptyList)], for instance, describes the values
 @racket[(cons n '())] with @racket[n] a number.  Checking a value against such
-a type never calls the function: it takes the value apart instead.  So a type
+a type takes the value apart to match the type.  So a type
 constructor is defined by @racket[recognizer], which recognizes the values the
 function builds, together with one @racket[selector] per parameter, which
 recovers the corresponding component.  A value belongs to
@@ -136,18 +136,22 @@ There must be exactly one selector per parameter.  @racket[recognizer] and the
 selectors are names of functions, which may be ordinary first-order functions
 even in BSL and BSL+.
 
-A correct type constructor definition has two requirements:
+A correct type constructor definition has these requirements:
 
 @itemlist[#:style 'ordered
-  @item{@racket[recognizer] must accept exactly the values the selectors can
-        take apart.}
+  @item{@racket[recognizer] must be a total function: it returns @racket[#true]
+  exactly for the values that the selectors can take apart; @racket[#false]
+  for any other value; and never raises an error.}
+  @item{Each @racket[selector] must go from the new type to the
+        corresponding component type: it takes a value that the function
+        built, and returns the argument that the function built it from.}
   @item{@elemtag["sludges-tc-decreasing"]{In a recursive type}, @racket[recognizer]
         must make the selectors strictly decreasing,
         so that the recursion terminates upon reaching a base case.}
 ]
 
 Since an unconstrained lift of @racket[add1] would break the
-@elemref["sludges-tc-decreasing"]{second requirement},
+@elemref["sludges-tc-decreasing"]{last requirement},
 @racket[Add1] restricts its recognizer to positive exact integers.
 
 Checking a lifted type is eager: a violation is reported when the signature is
@@ -586,6 +590,38 @@ Available in: all student languages.
 Expands to @racket[(void)] at run time, so that the subsequent
 @racket[define] of the same function does not cause a duplicate
 definition error.
+
+Available in: all student languages.
+}
+
+@; ========================================
+@section[#:tag "sludges-check-error"]{Testing for Signature Violations}
+
+@defform*[((check-error expression)
+           (check-error expression msg-expression))]{
+
+Like the student languages' @racket[check-error], except that a
+signature violation while evaluating @racket[expression] counts as the
+error that the test expects.  The test passes, and the violation is not
+reported among the signature violations.
+
+@racketblock[
+(: zero (Number -> Number))
+(define (zero x) 0)
+
+(code:comment "passes: the violation is the expected error")
+(check-error (zero "a"))
+(code:comment "passes: the message is that of the violation")
+(check-error (zero "a") "expected a Number, but got \"a\"")
+]
+
+Without this, a violation is only logged, and evaluation continues with
+the bad value: the test then fails if the function returns normally, and
+the violation appears in the report even if the test passes.
+
+The first violation ends the evaluation of @racket[expression].
+Violations elsewhere, including in @racket[check-expect], are still
+logged and reported as usual.
 
 Available in: all student languages.
 }

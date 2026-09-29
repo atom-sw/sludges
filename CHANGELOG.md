@@ -11,6 +11,23 @@ and never `1.0.0` or `2.0.0`.
 
 ## [Unreleased]
 
+## [1.2]
+
+### Changed
+
+- `check-error` counts a signature violation in its tested expression as
+  the expected error: the test passes, and the violation is not reported.
+  Before, the violation was reported separately, and the test passed only
+  if the function happened to crash on the bad value afterwards.
+
+### Fixed
+
+- Documentation: fix typos and clarify last section of `IMPL.md`
+  notes.
+- Documentation of `define-type-constructor`: state that the recognizer
+  must be a total function, and that each selector goes from the new
+  type to its component type.
+
 ## [1.1.2]
 
 ### Fixed
@@ -79,7 +96,8 @@ First public release.
 - A standalone teachpack, `sludges/dist/sludges.rkt`, that can be added in
   DrRacket without installing the package.
 
-[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.2...HEAD
+[1.2]: https://github.com/atom-sw/sludges/releases/tag/v1.2
 [1.1.2]: https://github.com/atom-sw/sludges/releases/tag/v1.1.2
 [1.1.1]: https://github.com/atom-sw/sludges/releases/tag/v1.1.1
 [1.1]: https://github.com/atom-sw/sludges/releases/tag/v1.1
