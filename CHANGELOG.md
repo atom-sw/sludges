@@ -11,6 +11,16 @@ and never `1.0.0` or `2.0.0`.
 
 ## [Unreleased]
 
+## [1.2.1]
+
+### Fixed
+
+- Documentation of `define-struct`: explain how the struct name becomes
+  the signature name, and that a camel-case name such as `personWithAge`
+  produces the signature `Personwithage`, not `PersonWithAge`.
+- Documentation of untyped `define-struct`: make the example's struct
+  name, constructor, and selectors agree.
+
 ## [1.2]
 
 ### Changed
@@ -96,7 +106,8 @@ First public release.
 - A standalone teachpack, `sludges/dist/sludges.rkt`, that can be added in
   DrRacket without installing the package.
 
-[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.2...HEAD
+[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/atom-sw/sludges/releases/tag/v1.2.1
 [1.2]: https://github.com/atom-sw/sludges/releases/tag/v1.2
 [1.1.2]: https://github.com/atom-sw/sludges/releases/tag/v1.1.2
 [1.1.1]: https://github.com/atom-sw/sludges/releases/tag/v1.1.1

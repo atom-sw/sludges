@@ -205,7 +205,7 @@ This defines:
 @racket[define-struct] behaves as the built-in @racketidfont{define-struct}.
 
 @racketblock[
-(define-struct Pair [a b])
+(define-struct pair [a b])
 
 (make-pair 3 4)       (code:comment "OK")
 (make-pair 3 "four")  (code:comment "OK")
@@ -230,16 +230,29 @@ This defines:
 
 Violations of signatures involving untyped structs are actually
 detected by the student languages' regular runtime error checking, not
-by signature checking.  For example, evaluating @racket[(pair-first
-3)] gives the error @racketcommentfont{pair-first: expects a pair,
+by signature checking.  For example, evaluating @racket[(pair-a
+3)] gives the error @racketcommentfont{pair-a: expects a pair,
 given 3}, which is not a signature violation.
 
 @bold{Naming convention.} The generated signature names use TitleCase
-with hyphens removed. That is, the struct name is capitalized, hyphens
-are removed, and the first letter following an hyphen is
-capitalized. For example, a struct called @racketidfont{foo-bar-3baz}
-produces signatures @racketidfont{FooBar3Baz} and
-@racketidfont{FooBar3BazOf}.
+with hyphens removed. That is, each hyphen-separated word of the struct
+name starts with an uppercase letter, all its other letters become
+lowercase, and the hyphens are removed. For example, a struct called
+@racketidfont{foo-bar-3baz} produces signatures
+@racketidfont{FooBar3Baz} and @racketidfont{FooBar3BazOf}.
+This rule comes from the built-in
+@racketidfont{define-struct} of the student languages, so @racketidfont{sludges}
+follows it for both typed and untyped structs.
+
+The rule lowercases every letter that does not start a word, so a
+struct name with uppercase letters in the middle does not give a
+signature with the same spelling. For example, 
+a struct called @racketidfont{personWithAge} produces signatures
+@racketidfont{Personwithage} and @racketidfont{PersonwithageOf}.
+To get a signature name with uppercase letters in the middle, separate
+the words of the struct name with hyphens: the struct
+@racketidfont{person-with-age} produces the signature
+@racketidfont{PersonWithAge}. 
 
 Available in: all student languages.  In BSL and BSL+,
 constructors and selectors are first-order. In ASL, fields are mutable.
