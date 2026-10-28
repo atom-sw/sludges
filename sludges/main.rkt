@@ -1869,6 +1869,13 @@
           number-from<
           number-to
           number-<to
+          ;; racket/base's provide, so that a student program can be split
+          ;; over several files.  The student languages lack it, and the
+          ;; usual remedy, (require racket/base), clashes with our
+          ;; define-struct and shadows lambda, which asl-context? inspects.
+          ;; Only the plain (provide id ...) form works: sub-forms such as
+          ;; all-defined-out stay unbound in student programs.
+          provide
           ;; Referenced by the expansion of define-type-constructor and
           ;; define-type, so they have to cross the module boundary; they
           ;; are not part of the user-facing interface.

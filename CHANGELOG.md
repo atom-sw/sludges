@@ -11,6 +11,14 @@ and never `1.0.0` or `2.0.0`.
 
 ## [Unreleased]
 
+## [1.3]
+
+### Added
+
+- `provide`, re-exported from `racket/base`, so that a student program
+  using sludges can be split over several files.  Requiring `racket/base`
+  for it instead does not work: it clashes with sludges' `define-struct`.
+
 ## [1.2.1]
 
 ### Fixed
@@ -106,7 +114,8 @@ First public release.
 - A standalone teachpack, `sludges/dist/sludges.rkt`, that can be added in
   DrRacket without installing the package.
 
-[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.3...HEAD
+[1.3]: https://github.com/atom-sw/sludges/releases/tag/v1.3
 [1.2.1]: https://github.com/atom-sw/sludges/releases/tag/v1.2.1
 [1.2]: https://github.com/atom-sw/sludges/releases/tag/v1.2
 [1.1.2]: https://github.com/atom-sw/sludges/releases/tag/v1.1.2

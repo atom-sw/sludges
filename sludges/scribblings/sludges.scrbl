@@ -640,6 +640,53 @@ Available in: all student languages.
 }
 
 @; ========================================
+@section[#:tag "sludges-provide"]{Splitting a Program over Multiple Files}
+
+@defform[(provide id ...)]{
+
+Exports each @racket[id] from the current file, so that another file can
+use it after @racket[(require "file.rkt")].  This is
+@racketmodname[racket/base]'s @racketidfont{provide}, which the student
+languages lack; @racketmodname[sludges] re-exports it, so a student
+program that uses @racketmodname[sludges] can be split over several
+files without requiring @racketmodname[racket/base].
+
+@racketblock[
+(code:comment "adders.rkt")
+(require sludges)
+
+(: add3 (Integer -> Integer))
+(define (add3 n) (+ n 3))
+
+(provide add3)
+]
+
+@racketblock[
+(code:comment "program.rkt")
+(require sludges)
+(require "adders.rkt")
+
+(add3 1.5)  (code:comment "signature violation: expected an Integer")
+]
+
+Signatures keep working across files: the checks of a provided function
+fire on the arguments that another file passes, and a provided struct
+or type signature, such as @racketidfont{Person} or
+@racketidfont{PersonOf}, can be used in the other file's signature
+declarations.
+
+Do not @racket[(require racket/base)] in a file that uses
+@racketmodname[sludges]: both export @racketidfont{define-struct}, so
+the file does not compile.  Only the plain form above is available: the
+sub-forms of @racketidfont{provide}, such as
+@racketidfont{all-defined-out}, are not.  As in plain ASL, the setters
+of a struct cannot be provided; provide a function that calls the setter
+instead.
+
+Available in: all student languages.
+}
+
+@; ========================================
 @section[#:tag "sludges-student-sigs"]{Student Language Signatures}
 
 Signature declarations and signature forms are part of the HtDP
