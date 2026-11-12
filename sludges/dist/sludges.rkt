@@ -17,6 +17,7 @@
                   signature-name signature-enforcer signature-syntax
                   signature-info-promise signature-<=?-proc signature-=?-proc
                   signature-violation-proc
+                  signature-checking-enabled?
                   call-with-signature-violation-proc
                   signature-violation
                   make-exn:fail:contract:signature)
@@ -650,6 +651,61 @@
     ;; No tested expression — delegate to native for error messages
     [_ (datum->syntax stx (cons #'native-check-error (cdr (syntax-e stx)))
                       stx stx)]))
+
+
+
+;; # Switching Signature Checks Off: ignore-types, ignore-all-types
+
+;; A check can cost far more than the computation it guards.  Checking n
+;; against (one-of (enum 1) (Add1 Natural+)) descends n levels, each held
+;; on the stack by make-lifted-signature's wrapper, so a gcd on two 9-digit
+;; numbers runs out of memory before doing any arithmetic.  These two forms
+;; let a program measure such a computation without its checks.
+;;
+;; Both turn off DeinProgramm's signature-checking-enabled?, which the
+;; HtDP languages initialize from DrRacket's (hidden, for them) "disable
+;; signature checks" preference.  Every check goes through apply-signature,
+;; which consults it: the arguments and result of a function declared with
+;; :, struct fields, and the top of every nested check.  A signature
+;; applied while it is off returns the value unchecked, and does not wrap a
+;; function at all.
+;;
+;; ignore-types parameterizes it, so it covers the dynamic extent of expr:
+;; a function created inside and called after it returns is checked again.
+
+(define-syntax (ignore-types stx)
+  (syntax-case stx ()
+    [(_ expr)
+     (syntax/loc stx
+       (parameterize ([signature-checking-enabled? #f]) expr))]
+    [_ (raise-syntax-error
+        'ignore-types
+        "expected one expression, as in (ignore-types (f x))" stx)]))
+
+;; ignore-all-types sets it for the rest of the run, in every file: the
+;; functions defined earlier stop checking, and those defined later are
+;; never wrapped.  Checks that ran before it, such as top-level expressions
+;; of a file loaded first, have already run.  There is deliberately no way
+;; back, so a program cannot end up with a mix of checked and never-wrapped
+;; functions.  Each Run in DrRacket starts with checks on again.
+;;
+;; It expands to an empty definition rather than an expression, so the
+;; student languages print nothing for it at the top level.
+
+(define-syntax (ignore-all-types stx)
+  (syntax-case stx ()
+    [(_)
+     (if (memq (syntax-local-context) '(module top-level))
+         (syntax/loc stx
+           (define-values ()
+             (begin (signature-checking-enabled? #f) (values))))
+         (raise-syntax-error
+          'ignore-all-types
+          "must be at the top level of the program, not inside an expression"
+          stx))]
+    [_ (raise-syntax-error
+        'ignore-all-types
+        "expected no arguments, as in (ignore-all-types)" stx)]))
 
 
 
@@ -1862,6 +1918,8 @@
           define-struct/typed
           define-struct
           check-error
+          ignore-types
+          ignore-all-types
           integer-from-to
           integer-from
           integer-to

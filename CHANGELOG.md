@@ -11,6 +11,17 @@ and never `1.0.0` or `2.0.0`.
 
 ## [Unreleased]
 
+## [1.4] - 2026-11-12
+
+### Added
+
+- `ignore-types` evaluates an expression without signature checks, and
+  `ignore-all-types` turns them off for the rest of the program, in every
+  file.  A check can cost far more than the computation it guards: a
+  recursive type such as `(one-of (enum 1) (Add1 Natural+))` takes time and
+  memory proportional to the number it checks, so a function declared on it
+  runs out of memory on a 9-digit argument.
+
 ## [1.3]
 
 ### Added
@@ -114,7 +125,8 @@ First public release.
 - A standalone teachpack, `sludges/dist/sludges.rkt`, that can be added in
   DrRacket without installing the package.
 
-[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.3...HEAD
+[Unreleased]: https://github.com/atom-sw/sludges/compare/v1.4...HEAD
+[1.4]: https://github.com/atom-sw/sludges/compare/v1.3...v1.4
 [1.3]: https://github.com/atom-sw/sludges/releases/tag/v1.3
 [1.2.1]: https://github.com/atom-sw/sludges/releases/tag/v1.2.1
 [1.2]: https://github.com/atom-sw/sludges/releases/tag/v1.2

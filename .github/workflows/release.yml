@@ -1,16 +1,16 @@
 # Verify the package on a clean, headless machine.
 #
 # This workflow stores no credentials and does not contact the package catalog.
-# The catalog polls the package source about once a day, and `scripts/release.sh`
-# notifies it directly from the maintainer's machine, so nothing here needs an
-# account password.
+# The catalog polls the package source about once a day, and the release's
+# post-publish hook notifies it directly from the maintainer's machine, so nothing
+# here needs an account password.
 #
 # `scripts/` is excluded from the release branch, so the steps below call `raco`
 # directly rather than reusing the repository's build and test scripts.
 #
 # It runs on any push of `main`, which happens twice for each release: first to
-# the private repository, where `release.sh` stages the snapshot, and then to the
-# public one.  The private run is the point of the arrangement — a runner differs
+# the private repository, where `ease release --push` stages the snapshot, and then
+# to the public one.  The private run is the point of the arrangement — a runner differs
 # from a development machine in ways the local gate cannot see (no X display, none
 # of the packages a full local install accumulates), and the staged release can
 # still be amended, whereas a published one cannot.

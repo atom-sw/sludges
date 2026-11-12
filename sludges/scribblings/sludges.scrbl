@@ -640,6 +640,70 @@ Available in: all student languages.
 }
 
 @; ========================================
+@section[#:tag "sludges-ignore-types"]{Switching Signature Checks Off}
+
+Checking a value against its signature can introduce significant overhead.
+For example, with the recursive type definition
+
+@racketblock[
+(define-type Natural+ (one-of (enum 1) (Add1 Natural+)))
+]
+
+checking a number @racket[n] takes time and memory proportional to
+@racket[n], so a function declared on @racketidfont{Natural+} runs out of
+memory while checking a large argument.
+
+The two forms below run a program, or part of it, without checking its
+signatures.  Use them to remove the overhead when the program runs on
+realistic inputs, while keeping the signatures as documentation.
+
+@defform[(ignore-types expression)]{
+
+Evaluates @racket[expression] without checking any signature, and
+returns its value.  The rest of the program, including its tests, is
+still checked.
+
+@racketblock[
+(: gcd (Natural+ Natural+ -> Natural+))
+(code:comment "...")
+
+(code:comment "fast: the arguments are not checked")
+(time (ignore-types (gcd 101135853 45014640)))
+(code:comment "checked as usual")
+(check-expect (gcd 18 24) 6)
+]
+
+Nothing is checked while @racket[expression] is evaluated: neither the
+arguments and results of functions declared with @racket[:], nor struct
+fields, including in functions that @racket[expression] calls.  If
+@racket[expression] evaluates to a function, that is checked again normally
+when it is called later, outside @racket[ignore-types].
+
+Available in: all student languages.
+}
+
+@defform[(ignore-all-types)]{
+
+Turns signature checking off for the rest of the program: no signature
+is checked from this point on, in any file, including in the tests.
+Put it at the top of the file, after @racket[(require sludges)]:
+
+@racketblock[
+(require sludges)
+(ignore-all-types)
+]
+
+It covers the functions defined before it as well as after it, and the
+files that require the file where it appears.  Checking cannot be turned
+back on within the same run.
+
+It must appear at the top level of the program, not inside an
+expression.
+
+Available in: all student languages.
+}
+
+@; ========================================
 @section[#:tag "sludges-provide"]{Splitting a Program over Multiple Files}
 
 @defform[(provide id ...)]{
